@@ -11,7 +11,7 @@ def _write(path: Path, content: str) -> None:
 
 
 def test_restore_dry_run_skips_dependency_install(tmp_path: Path) -> None:
-    _write(tmp_path / "pyproject.toml", "[project]\nname = \"demo\"\nversion = \"0.1.0\"\n")
+    _write(tmp_path / "pyproject.toml", '[project]\nname = "demo"\nversion = "0.1.0"\n')
 
     payload = restore_project(tmp_path, dry_run=True)
 

@@ -1,19 +1,5 @@
-import os
-from pathlib import Path
+"""Client factory for the cloud tests. Thin wrapper over the shared lab helper."""
 
-import boto3
-from dotenv import load_dotenv
+from scripts.lab.aws_session import get_client
 
-load_dotenv(Path(__file__).parent.parent.parent / ".env.credentials")
-
-
-def get_client(service: str):
-    # verify=False: Python 3.14 SSL regression workaround. truststore was tested
-    # but causes RecursionError in botocore's SSLContext patching. See docs/known-issues.md
-    return boto3.client(
-        service,
-        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
-        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
-        region_name=os.environ.get("AWS_DEFAULT_REGION", "us-east-1"),
-        verify=False,
-    )
+__all__ = ["get_client"]
