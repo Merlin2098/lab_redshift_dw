@@ -1,0 +1,19 @@
+# Copy to terraform.tfvars. Every value below is optional; these are the defaults.
+project_name = "redshift-lab"
+environment  = "dev"
+aws_region   = "us-east-1"
+owner        = "lab-student"
+cost_center  = "redshift-lab"
+
+# Cost guards
+base_capacity               = 4
+max_capacity                = 8
+usage_limit_rpu_hours_daily = 16
+
+# Network: use 3 if the first apply rejects 2 subnets.
+availability_zone_count     = 2
+enable_enhanced_vpc_routing = false
+
+# Optional monthly budget with email alerts (needs an email).
+enable_budget_guardrail = false
+# budget_alert_email    = "you@example.com"
