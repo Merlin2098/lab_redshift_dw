@@ -17,6 +17,30 @@ def _paginate(client, operation: str, key: str, **kwargs) -> list[dict[str, Any]
     return items
 
 
+# Operations read with a botocore paginator. Checked against real clients in the tests:
+# boto3 has no paginator for athena list_work_groups, which is why it is listed by hand below.
+PAGINATED_OPERATIONS: dict[str, tuple[str, ...]] = {
+    "redshift-serverless": ("list_workgroups", "list_namespaces", "list_snapshots"),
+    "iam": ("list_roles",),
+    "logs": ("describe_log_groups",),
+    "ec2": ("describe_vpcs",),
+    "glue": ("get_databases",),
+    "secretsmanager": ("list_secrets",),
+}
+
+
+def _list_athena_workgroups(client) -> list[dict[str, Any]]:
+    """Athena has no paginator for list_work_groups: follow NextToken by hand."""
+    items: list[dict[str, Any]] = []
+    token: str | None = None
+    while True:
+        page = client.list_work_groups(**({"NextToken": token} if token else {}))
+        items.extend(page.get("WorkGroups", []))
+        token = page.get("NextToken")
+        if not token:
+            return items
+
+
 def find_residuals(
     clients: Mapping[str, Any], *, prefix: str, project: str, glue_database: str
 ) -> list[str]:
@@ -74,7 +98,7 @@ def find_residuals(
     ]
     residuals += [
         f"athena workgroup: {wg['Name']}"
-        for wg in _paginate(clients["athena"], "list_work_groups", "WorkGroups")
+        for wg in _list_athena_workgroups(clients["athena"])
         if wg["Name"].startswith(prefix)
     ]
     # Secrets already scheduled for deletion are excluded by list_secrets

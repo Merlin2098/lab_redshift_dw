@@ -85,7 +85,7 @@ spectrum-enhanced-vpc, serverless-billing-on-demand (docs.aws.amazon.com/redshif
 
 ### Riesgos abiertos de la sección 1
 
-- **Spectrum sin EVR:** la documentación describe Spectrum/Glue solo para el caso con EVR. Sin EVR en subnets privadas sin NAT, COPY y UNLOAD funcionan en la práctica, pero Spectrum en Serverless **no está confirmado**. Se valida con un smoke test en el primer despliegue. Si falla, el fallback es `enable_enhanced_vpc_routing = true` con 3 subnets/3 AZs y los endpoints (el endpoint de Glue tiene costo por hora).
+- **Spectrum sin EVR (CONFIRMADO en el primer despliegue, ver sección 9):** la documentación describe Spectrum/Glue solo para el caso con EVR. Sin EVR en subnets privadas sin NAT, COPY y UNLOAD funcionan en la práctica, pero Spectrum en Serverless **no está confirmado**. Se valida con un smoke test en el primer despliegue. Si falla, el fallback es `enable_enhanced_vpc_routing = true` con 3 subnets/3 AZs y los endpoints (el endpoint de Glue tiene costo por hora).
 - **Argumentos del provider AWS:** verificados el 2026-09-30 contra la documentación del provider: `manage_admin_password`, `default_iam_role_arn` (debe estar también en `iam_roles`), `log_exports`, `max_capacity`, `usage_limit` (`deactivate`). **Conflicto abierto:** la documentación del provider exige 3 subnets en 3 AZs; la de AWS dice 2 sin EVR. Fallback: `availability_zone_count = 3`.
 - **Log group de Redshift:** el nombre real es `/aws/redshift/<namespace>/<log_type>`; si no existe, Redshift lo crea con retención "Never Expire" fuera de Terraform. Por eso se crea en Terraform antes del namespace y solo se exporta `connectionlog`.
 - **Trust de los roles:** deben incluir `redshift.amazonaws.com` y `redshift-serverless.amazonaws.com`.
@@ -105,7 +105,7 @@ Un archivo por parte de la guía, legibles y copiables a Query Editor v2:
 
 - **Sin ARNs en el SQL:** se usa `IAM_ROLE DEFAULT` (el namespace fija el rol por defecto).
   - Confirmado en la documentación: COPY (`IAM_ROLE { default | 'SESSION' | 'arn…' }`) y `CREATE EXTERNAL SCHEMA`.
-  - **Pendiente de confirmar:** UNLOAD (mismo parámetro de autorización, no leído todavía).
+  - UNLOAD: confirmado en el primer despliegue (sección 9).
 - Solo dos placeholders, sustituidos con `string.Template` de la stdlib: `${bucket}` (UNLOAD, LOCATION) y `${role_sin_permisos}` (Parte 7).
 
 ### Ejecutor: `scripts/lab/run_lab.py`
@@ -237,3 +237,24 @@ Cada paso deja el repo verificable antes del siguiente:
 ## 8. Restricciones heredadas de AGENTS.md
 
 Tags comunes con `CostCenter` en todo recurso; `aws_cloudwatch_log_group` explícito con `retention_in_days`; budget detrás de `enable_budget_guardrail` (default `false`); sin versioning de S3 por defecto; sin tocar `terraform.tfstate`; tests `tests/aws/` al desplegar; validar roles IAM antes de aplicar; SQL separado de Python; configuración sobre hardcoding.
+
+---
+
+## 9. Resultados del primer despliegue (2026-09-30)
+
+Despliegue con valores por defecto (sin `terraform.tfvars`), ejecutado por Ricardo; pruebas ejecutadas después con `run_lab.py`.
+
+| Riesgo / supuesto | Resultado |
+|---|---|
+| Spectrum sin EVR en subnets privadas sin NAT | **Funciona.** `SELECT COUNT(*) FROM spectrum.sales` devuelve 172.456 filas; el join con `users` también. |
+| 2 subnets en 2 AZs | **Aceptado por AWS** (el estado tiene 2 `aws_subnet.private`). La doc del provider que exige 3 no aplica sin EVR. |
+| `IAM_ROLE DEFAULT` en COPY, UNLOAD y `CREATE EXTERNAL SCHEMA` | **Funciona en los tres.** UNLOAD escribió 4 archivos Parquet en `gold/ventas_agregadas/year=2008/`. |
+| Athena lee la tabla de Glue creada por Redshift | **Funciona** y devuelve exactamente los mismos resultados que Redshift. Athena: 898 ms, 11,9 MB escaneados (~0,00006 USD); Redshift: 295 ms. |
+| Conteos de TICKIT | **Coinciden** con `EXPECTED_COUNTS` (`--check` OK), también tras recargar con `--all`. |
+| Idempotencia de la Parte 1 | **Confirmada:** recargar no duplica filas. |
+| Parte 7 | El COPY con `rol-sin-permisos` devuelve `S3ServiceException: Access Denied (403)`. `sys_load_error_detail` queda **vacío** y `sys_query_history` solo dice `sending CmdAbort`: la guía y el SQL se corrigieron (la pista real es el error del propio COPY). |
+| Nombre del secret gestionado | `redshift!redshift-lab-dev-ns-awsuser`; el filtro `redshift!<prefijo>` del verificador lo encuentra. |
+| Verificador de teardown (control positivo con la infra viva) | Encuentra las 10 categorías de recursos. **Bug real encontrado y corregido:** boto3 no tiene paginador para `athena list_work_groups` (los fakes de los tests lo ocultaban); ahora se pagina a mano y un test contra clientes boto3 reales lo vigila. |
+| Tests `cloud` | 6/6 en verde contra el lab desplegado. |
+
+**Pendiente:** `terraform destroy` y `verify_teardown.py` debe imprimir `OK` (lo ejecuta Ricardo). Quedan sin observar el tiempo de destroy y un posible `DependencyViolation` de ENIs.

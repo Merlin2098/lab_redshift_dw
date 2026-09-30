@@ -380,13 +380,14 @@ Redshift devuelve un error de tipo `S3ServiceException` / `Access Denied`.
 ### 7.2. Diagnosticar
 
 ```sql
--- Revisar el detalle del error de carga (vista recomendada, funciona en Provisioned y Serverless)
+-- Errores de carga a nivel de fila (datos mal formados). Para un error de permisos el resultado es VACÍO:
+-- esta vista solo registra problemas de datos, no de acceso.
 SELECT *
 FROM sys_load_error_detail
 ORDER BY start_time DESC
 LIMIT 5;
 
--- Un error de permisos puede aparecer solo en el historial de consultas
+-- El historial solo muestra que la consulta falló, con un mensaje genérico ("sending CmdAbort")
 SELECT query_id, status, error_message
 FROM sys_query_history
 WHERE query_text LIKE 'COPY users%'
@@ -394,7 +395,7 @@ ORDER BY start_time DESC
 LIMIT 5;
 ```
 
-Guiar al alumno a leer el mensaje de error y ubicar que el problema es de **permisos del rol**, no de sintaxis SQL ni de formato de datos.
+Guiar al alumno a leer **el mensaje de error que devuelve el propio `COPY`** (`S3ServiceException: Access Denied, Status 403`): ahí está la pista de que el problema es de **permisos del rol**, no de sintaxis SQL ni de formato de datos. Que `sys_load_error_detail` salga vacío es parte de la lección: esa vista es para errores de datos.
 
 ### 7.3. Corregir
 

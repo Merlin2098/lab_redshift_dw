@@ -1,4 +1,6 @@
-from scripts.lab.teardown import find_residuals
+import boto3
+
+from scripts.lab.teardown import PAGINATED_OPERATIONS, find_residuals
 from scripts.lab.verify_teardown import main
 
 
@@ -22,6 +24,15 @@ class FakeClient:
 
     def list_buckets(self):
         return {"Buckets": [{"Name": name} for name in self._buckets]}
+
+    def list_work_groups(self, **kwargs):
+        """Athena has no paginator for this operation: pages are chained with NextToken."""
+        pages = self._pages.get("list_work_groups", [{}])
+        index = int(kwargs.get("NextToken", 0))
+        page = dict(pages[index])
+        if index + 1 < len(pages):
+            page["NextToken"] = str(index + 1)
+        return page
 
 
 def clean_clients():
@@ -201,3 +212,34 @@ def test_main_exit_code_reflects_residuals(capsys):
     dirty["s3"] = FakeClient(buckets=["redshift-lab-dev-123456789012-lab"])
     assert main(["--region", "us-east-1"], clients=dirty) == 1
     assert "bucket" in capsys.readouterr().out.lower()
+
+
+def test_every_operation_used_with_a_paginator_really_has_one():
+    """Regression: boto3 has no paginator for athena list_work_groups; fakes hid it until a real run."""
+    for service, operations in PAGINATED_OPERATIONS.items():
+        client = boto3.client(
+            service,
+            region_name="us-east-1",
+            aws_access_key_id="placeholder",
+            aws_secret_access_key="placeholder",
+        )
+        for operation in operations:
+            assert client.can_paginate(operation), (
+                f"{service}.{operation} cannot be paginated"
+            )
+
+
+def test_athena_workgroups_are_followed_across_pages():
+    clients = clean_clients()
+    clients["athena"] = FakeClient(
+        pages={
+            "list_work_groups": [
+                {"WorkGroups": [{"Name": "primary"}]},
+                {"WorkGroups": [{"Name": "redshift-lab-dev-wg"}]},
+            ]
+        }
+    )
+
+    residuals = _find(clients)
+
+    assert residuals == ["athena workgroup: redshift-lab-dev-wg"]
