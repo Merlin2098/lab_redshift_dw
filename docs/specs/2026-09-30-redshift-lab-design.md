@@ -63,7 +63,7 @@ módulos de `AGENTS.md` no se activa: `iam` recibe los ARN de `s3` y
 | `iam` | Rol de Redshift (trust `redshift.amazonaws.com`; lectura de `redshift-downloads/tickit*`; lectura/escritura del bucket del lab; acceso a Glue). Rol vacío `rol-sin-permisos` para la Parte 7. |
 | `redshift` | Namespace (db `dev`, `manage_admin_password = true`, rol por defecto), workgroup (`base_capacity = 4`, `publicly_accessible = false`), `max_capacity`, usage limit diario, log groups explícitos con `retention_in_days = 7`. |
 | `athena` | Workgroup con resultados en `s3://<bucket>/athena-results/`, `force_destroy`. |
-| `budget` | El Budget y el SNS de la plantilla actual, detrás de `enable_budget_guardrail` (default `false`). |
+| `budget` | El Budget de la plantilla (sin su SNS, que sus notificaciones nunca usaban, y con el filtro de tag corregido: `$${var.project_name}` producía el texto literal), detrás de `enable_budget_guardrail` (default `false`). |
 
 ### Controles de costo (`redshift`)
 
@@ -86,7 +86,10 @@ spectrum-enhanced-vpc, serverless-billing-on-demand (docs.aws.amazon.com/redshif
 ### Riesgos abiertos de la sección 1
 
 - **Spectrum sin EVR:** la documentación describe Spectrum/Glue solo para el caso con EVR. Sin EVR en subnets privadas sin NAT, COPY y UNLOAD funcionan en la práctica, pero Spectrum en Serverless **no está confirmado**. Se valida con un smoke test en el primer despliegue. Si falla, el fallback es `enable_enhanced_vpc_routing = true` con 3 subnets/3 AZs y los endpoints (el endpoint de Glue tiene costo por hora).
-- **Argumentos del provider AWS** (`manage_admin_password`, `default_iam_role_arn`, `log_exports`, `max_capacity`, `usage_limit`, comportamiento de snapshot final al destruir el namespace): el servidor MCP de Terraform no conectó; se verifican contra la documentación del provider antes del plan de implementación.
+- **Argumentos del provider AWS:** verificados el 2026-09-30 contra la documentación del provider: `manage_admin_password`, `default_iam_role_arn` (debe estar también en `iam_roles`), `log_exports`, `max_capacity`, `usage_limit` (`deactivate`). **Conflicto abierto:** la documentación del provider exige 3 subnets en 3 AZs; la de AWS dice 2 sin EVR. Fallback: `availability_zone_count = 3`.
+- **Log group de Redshift:** el nombre real es `/aws/redshift/<namespace>/<log_type>`; si no existe, Redshift lo crea con retención "Never Expire" fuera de Terraform. Por eso se crea en Terraform antes del namespace y solo se exporta `connectionlog`.
+- **Trust de los roles:** deben incluir `redshift.amazonaws.com` y `redshift-serverless.amazonaws.com`.
+- **Entorno local:** un antivirus que inspecciona TLS (AVG) rompe el canal local Terraform↔provider (`x509: certificate signed by unknown authority`); se evita con `TF_DISABLE_PLUGIN_TLS=1` o excluyendo el binario del provider de la inspección.
 
 ---
 
@@ -96,8 +99,9 @@ spectrum-enhanced-vpc, serverless-billing-on-demand (docs.aws.amazon.com/redshif
 
 Un archivo por parte de la guía, legibles y copiables a Query Editor v2:
 `01_ddl.sql`, `02_copy.sql`, `03_star_schema.sql`, `04_analytics.sql`,
-`05_athena_vs_redshift.sql`, `06_unload.sql`, `07_spectrum.sql`,
-`08_troubleshooting.sql`.
+`05_athena_vs_redshift.sql`, `06_unload.sql`, `07_spectrum_setup.sql`,
+`07_spectrum_queries.sql`, `08_troubleshooting.sql`. Las Partes 4 y 6 ejecutan primero
+`07_spectrum_setup.sql` (idempotente) porque ambas necesitan la tabla externa.
 
 - **Sin ARNs en el SQL:** se usa `IAM_ROLE DEFAULT` (el namespace fija el rol por defecto).
   - Confirmado en la documentación: COPY (`IAM_ROLE { default | 'SESSION' | 'arn…' }`) y `CREATE EXTERNAL SCHEMA`.

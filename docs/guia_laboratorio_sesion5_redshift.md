@@ -14,46 +14,23 @@ Para no quemar tiempo de sesión en provisioning, el cluster/workgroup debe esta
 
 ### 0.1. Desplegar Redshift Serverless
 
-Vía consola: **Redshift → Serverless → Create workgroup**, o vía CLI:
+El lab se despliega con Terraform (ver [README](../README.md#2-desplegar)): `terraform -chdir=infra apply` crea el
+namespace y el workgroup con **4 RPUs** (el mínimo actual en us-east-1 y suficiente para TICKIT, que no es un dataset
+de gran volumen). No hay contraseñas en texto plano: la contraseña de admin la genera y guarda Secrets Manager.
 
-```bash
-aws redshift-serverless create-namespace \
-  --namespace-name bootcamp-dea-ns \
-  --admin-username awsuser \
-  --admin-user-password "TuPasswordSegura123!" \
-  --db-name dev
+### 0.2. IAM Role para COPY/UNLOAD/Spectrum
 
-aws redshift-serverless create-workgroup \
-  --workgroup-name bootcamp-dea-wg \
-  --namespace-name bootcamp-dea-ns \
-  --base-capacity 8 \
-  --subnet-ids <subnet-1> <subnet-2> \
-  --security-group-ids <sg-id>
-```
+El rol IAM lo crea Terraform y queda como **rol por defecto** del namespace. Por eso el SQL usa `IAM_ROLE DEFAULT` y
+no lleva ARNs. Además se crea `rol-sin-permisos` para la Parte 7. Solo puede haber un rol default por namespace.
 
-> `base-capacity 8` RPUs es el mínimo — suficiente para una demo con el dataset TICKIT (no es un dataset de gran volumen).
+### 0.3. Región
 
-### 0.2. Crear el IAM Role para COPY/UNLOAD/Spectrum
-
-El namespace necesita un rol con permisos de lectura a S3 (para COPY y Spectrum) y escritura (para UNLOAD hacia el bucket propio del curso).
-
-- Consola: **Redshift Serverless → Namespace → Security and encryption → Manage IAM roles → Create IAM role**.
-- Anota el ARN del rol — se usa en todos los `IAM_ROLE '...'` de esta guía. Solo puede haber un rol default por namespace.
-
-### 0.3. Verificar la región
-
-El bucket público `s3://redshift-downloads/tickit/` reside en **us-east-1**. Si el workgroup está en otra región, hay dos opciones:
-
-- **Opción A (recomendada para la demo):** desplegar el workgroup en `us-east-1` para evitar transferencia cross-region.
-- **Opción B:** copiar el dataset a un bucket propio en la región del curso antes de la clase:
-
-```bash
-aws s3 cp s3://redshift-downloads/tickit/ s3://<tu-bucket>/tickit/ --recursive
-```
+El bucket público `s3://redshift-downloads/tickit/` reside en **us-east-1**. El lab se despliega ahí (Terraform valida
+la región) para evitar transferencia cross-region.
 
 ### 0.4. Conexión
 
-Usar **Redshift Query Editor v2** (recomendado para la demo — no requiere instalar cliente SQL, permite proyectar pantalla completa y guardar notebooks). Conectar con `Database username and password` sobre el workgroup `bootcamp-dea-wg`, base `dev`.
+Usar **Redshift Query Editor v2** (recomendado para la demo — no requiere instalar cliente SQL, permite proyectar pantalla completa y guardar notebooks). Conectar con la opción **AWS Secrets Manager** (secret del output `admin_secret_arn`, visible con `terraform -chdir=infra output admin_secret_arn`) sobre el workgroup del lab (output `workgroup_name`), base `dev`.
 
 ---
 
@@ -173,37 +150,37 @@ CREATE TABLE sales(
 ```sql
 COPY users
 FROM 's3://redshift-downloads/tickit/allusers_pipe.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+IAM_ROLE DEFAULT
 DELIMITER '|' REGION 'us-east-1';
 
 COPY venue
 FROM 's3://redshift-downloads/tickit/venue_pipe.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+IAM_ROLE DEFAULT
 DELIMITER '|' REGION 'us-east-1';
 
 COPY category
 FROM 's3://redshift-downloads/tickit/category_pipe.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+IAM_ROLE DEFAULT
 DELIMITER '|' REGION 'us-east-1';
 
 COPY date
 FROM 's3://redshift-downloads/tickit/date2008_pipe.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+IAM_ROLE DEFAULT
 DELIMITER '|' REGION 'us-east-1';
 
 COPY event
 FROM 's3://redshift-downloads/tickit/allevents_pipe.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+IAM_ROLE DEFAULT
 DELIMITER '|' TIMEFORMAT 'YYYY-MM-DD HH:MI:SS' REGION 'us-east-1';
 
 COPY listing
 FROM 's3://redshift-downloads/tickit/listings_pipe.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+IAM_ROLE DEFAULT
 DELIMITER '|' REGION 'us-east-1';
 
 COPY sales
 FROM 's3://redshift-downloads/tickit/sales_tab.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+IAM_ROLE DEFAULT
 DELIMITER '\t' TIMEFORMAT 'MM/DD/YYYY HH:MI:SS' REGION 'us-east-1';
 ```
 
@@ -265,27 +242,33 @@ ORDER BY d.year, d.month, ingresos_totales DESC;
 
 ### 4.1. Exponer los mismos datos vía Spectrum/Athena
 
-Si en la Sesión 4 ya existe una tabla Athena equivalente sobre S3, reutilizarla. Si no, crear una tabla externa mínima apuntando al mismo dataset TICKIT en Parquet (ver Parte 6 — Spectrum, que usa el mismo mecanismo de external table).
+La tabla externa `spectrumdb.sales` se crea con `sql/07_spectrum_setup.sql` (la misma de la Parte 6) y Athena la lee
+desde el Glue Data Catalog.
 
 ### 4.2. Ejecutar el mismo query conceptual en ambos motores
 
 En **Athena**, sobre los datos crudos en S3:
 
 ```sql
-SELECT catgroup, COUNT(*) AS ventas
-FROM tickit_external.sales
-GROUP BY catgroup;
+SELECT dateid, COUNT(*) AS ventas, SUM(pricepaid) AS ingresos
+FROM spectrumdb.sales
+GROUP BY dateid
+ORDER BY ingresos DESC
+LIMIT 10;
 ```
 
 En **Redshift**, sobre la tabla ya cargada:
 
 ```sql
-SELECT c.catgroup, COUNT(*) AS ventas
-FROM sales s
-JOIN event e ON s.eventid = e.eventid
-JOIN category c ON e.catid = c.catid
-GROUP BY c.catgroup;
+SELECT dateid, COUNT(*) AS ventas, SUM(pricepaid) AS ingresos
+FROM sales
+GROUP BY dateid
+ORDER BY ingresos DESC
+LIMIT 10;
 ```
+
+> La versión anterior de la consulta de Athena hacía `GROUP BY catgroup` sobre `sales`, columna que esa tabla no tiene.
+> Ambas consultas usan ahora solo columnas de `sales`.
 
 ### 4.3. Comparar en pantalla
 
@@ -310,14 +293,14 @@ UNLOAD ('SELECT d.year, d.month, c.catgroup, SUM(s.pricepaid) AS ingresos
          JOIN event e ON s.eventid = e.eventid
          JOIN category c ON e.catid = c.catid
          GROUP BY d.year, d.month, c.catgroup')
-TO 's3://<tu-bucket>/gold/ventas_agregadas/'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
+TO 's3://<bucket_name>/gold/ventas_agregadas/'
+IAM_ROLE DEFAULT
 FORMAT AS PARQUET
 PARTITION BY (year)
 ALLOWOVERWRITE;
 ```
 
-Mostrar en la consola de S3 los archivos Parquet resultantes, particionados por año — cerrando el ciclo COPY/UNLOAD del Bloque 4.
+Mostrar en la consola de S3 los archivos Parquet resultantes, particionados por año — cerrando el ciclo COPY/UNLOAD del Bloque 4. (`<bucket_name>` es el output `bucket_name` de Terraform.)
 
 ---
 
@@ -329,12 +312,13 @@ TICKIT ya incluye una carpeta pensada para esto: `s3://redshift-downloads/tickit
 
 ### 6.1. Crear el external schema
 
+La base de Glue `spectrumdb` ya existe: la crea Terraform (y la destruye con el resto), por eso no se usa `CREATE EXTERNAL DATABASE`.
+
 ```sql
-CREATE EXTERNAL SCHEMA spectrum
+CREATE EXTERNAL SCHEMA IF NOT EXISTS spectrum
 FROM DATA CATALOG
 DATABASE 'spectrumdb'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/<tu-rol-redshift>'
-CREATE EXTERNAL DATABASE IF NOT EXISTS;
+IAM_ROLE DEFAULT;
 ```
 
 ### 6.2. Crear la external table
@@ -382,12 +366,12 @@ Alineado con `04_rediseno_sesiones_3_a_9.md`: un solo caso, ligero, no una secue
 
 ### 7.1. Provocar el error
 
-Ejecutar un `COPY` usando un rol IAM que **no** tiene permiso de lectura sobre el bucket (crear de antemano un rol vacío, ej. `role/rol-sin-permisos`, o usar un ARN inválido a propósito):
+Ejecutar un `COPY` usando un rol IAM que **no** tiene permiso de lectura sobre el bucket (Terraform ya crea `rol-sin-permisos`; su ARN es el output `no_permissions_role_arn`):
 
 ```sql
 COPY users
 FROM 's3://redshift-downloads/tickit/allusers_pipe.txt'
-IAM_ROLE 'arn:aws:iam::<aws-account-id>:role/rol-sin-permisos'
+IAM_ROLE '<no_permissions_role_arn>'
 DELIMITER '|' REGION 'us-east-1';
 ```
 
@@ -401,13 +385,20 @@ SELECT *
 FROM sys_load_error_detail
 ORDER BY start_time DESC
 LIMIT 5;
+
+-- Un error de permisos puede aparecer solo en el historial de consultas
+SELECT query_id, status, error_message
+FROM sys_query_history
+WHERE query_text LIKE 'COPY users%'
+ORDER BY start_time DESC
+LIMIT 5;
 ```
 
 Guiar al alumno a leer el mensaje de error y ubicar que el problema es de **permisos del rol**, no de sintaxis SQL ni de formato de datos.
 
 ### 7.3. Corregir
 
-Volver a ejecutar el mismo `COPY` con el rol correcto (el mismo usado en la Parte 1) y confirmar que carga exitosamente.
+Vaciar la tabla con `TRUNCATE users;` (ya se había cargado en la Parte 1), volver a ejecutar el mismo `COPY` con el rol correcto (`IAM_ROLE DEFAULT`, como en la Parte 1) y confirmar que carga exitosamente.
 
 **Mensaje clave:** este es el mismo tipo de error (`COPY` sin permisos IAM del rol) que aparece documentado como caso de troubleshooting en el diseño general del curso — mantiene coherencia con las demás sesiones.
 
@@ -415,12 +406,20 @@ Volver a ejecutar el mismo `COPY` con el rol correcto (el mismo usado en la Part
 
 ## Checklist de cierre de la demo
 
-- [ ] Namespace/workgroup desplegado y verificado antes de clase
-- [ ] IAM Role con permisos S3 configurado y su ARN a mano
+- [ ] Namespace/workgroup desplegado con Terraform y verificado antes de clase
+- [ ] IAM Role por defecto del namespace (lo crea Terraform)
 - [ ] Las 7 tablas TICKIT creadas y cargadas (validar counts)
 - [ ] Bucket propio del curso listo para UNLOAD (con permisos de escritura en el rol)
 - [ ] External schema de Spectrum probado de antemano (evita sorpresas de Lake Formation/permisos en vivo)
 - [ ] Decidir si se incluye la Parte 7 (troubleshooting) según el tiempo disponible ese día
+- [ ] `terraform destroy` ejecutado y `verify_teardown.py` imprime OK
+
+---
+
+## Automatización
+
+Cada parte se puede ejecutar con `uv run python scripts/lab/run_lab.py --part N` (o `--all`), y `--check` valida los
+conteos de TICKIT. El SQL de cada parte vive en `sql/`. Ver el [README](../README.md).
 
 ---
 
