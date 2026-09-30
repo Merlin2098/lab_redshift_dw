@@ -1,0 +1,131 @@
+// Arquitectura del laboratorio Redshift (Sesión 5): dependencias entre módulos Terraform y herramientas.
+//
+// Fuente de verdad: infra/main.tf (cableado de módulos), infra/modules/*/main.tf (recursos) y
+// scripts/lab/ (herramientas). Si cambia el cableado, actualizar este archivo y volver a renderizar:
+//   dot -Tsvg docs/architecture/architecture.dot -o docs/architecture/architecture.svg
+//   dot -Tpng -Gdpi=110 docs/architecture/architecture.dot -o docs/architecture/architecture.png
+//
+// Lectura: una flecha A -> B significa "B consume un valor que produce A" (B depende de A).
+//   trazo continuo   = dependencia de Terraform (se resuelve en plan/apply y fija el orden de creación)
+//   trazo discontinuo = dependencia en tiempo de ejecución o externa a Terraform
+//   trazo punteado   = recurso opcional (solo existe si se activa su variable)
+
+digraph architecture {
+  rankdir=TB;
+  compound=true;
+  newrank=true;
+  nodesep=0.35;
+  ranksep=0.75;
+  fontname="Helvetica";
+  fontsize=16;
+  labelloc=t;
+  label="Laboratorio Redshift Serverless — dependencias entre módulos\n";
+  node  [fontname="Helvetica", fontsize=11, shape=box, style="rounded,filled", fillcolor="#FFFFFF", color="#5B6770"];
+  edge  [fontname="Helvetica", fontsize=10, color="#3B4A57", fontcolor="#3B4A57"];
+
+  // ---------------------------------------------------------------- raíz
+  subgraph cluster_root {
+    label="infra/  (raíz: solo compone módulos y calcula nombres y tags)";
+    style="rounded,dashed"; color="#8A949C"; fontcolor="#5B6770";
+
+    caller [label="data.aws_caller_identity\naccount_id", shape=note, fillcolor="#F2F2F2"];
+
+    // ------------------------------------------------------------ network
+    subgraph cluster_network {
+      label="module.network"; style="rounded,filled"; fillcolor="#E8F1FB"; color="#6FA0D6";
+      vpc   [label="aws_vpc\n10.42.0.0/16"];
+      subs  [label="aws_subnet.private\n2 subnets / 2 AZs\n(3 con EVR)"];
+      sg    [label="aws_security_group\nworkgroup\n(sin reglas de entrada)"];
+      ep    [label="VPC endpoints\nS3 (gateway) + Glue (interface)\nsolo con EVR", style="rounded,filled,dotted"];
+      vpc -> subs; vpc -> sg; vpc -> ep [style=dotted];
+    }
+
+    // ------------------------------------------------------------ s3
+    subgraph cluster_s3 {
+      label="module.s3"; style="rounded,filled"; fillcolor="#FDF1E3"; color="#E0A458";
+      bucket [label="aws_s3_bucket\n<proyecto>-<env>-<account>-lab\nforce_destroy, SSE-AES256,\nsin acceso público, solo TLS"];
+    }
+
+    // ------------------------------------------------------------ data_catalog
+    subgraph cluster_catalog {
+      label="module.data_catalog"; style="rounded,filled"; fillcolor="#EEF6E6"; color="#8DB96A";
+      glue [label="aws_glue_catalog_database\nspectrumdb\n(contiene spectrum.sales)"];
+    }
+
+    // ------------------------------------------------------------ iam
+    subgraph cluster_iam {
+      label="module.iam"; style="rounded,filled"; fillcolor="#F6EAF7"; color="#B07BB8";
+      role   [label="aws_iam_role\nredshift-role\n(trust: redshift + redshift-serverless)"];
+      p_ds   [label="policy dataset-read\nS3 tickit/*  (solo lectura)", fillcolor="#FBF5FC"];
+      p_lab  [label="policy lab-bucket\nlectura y escritura del bucket del lab", fillcolor="#FBF5FC"];
+      p_glue [label="policy glue-catalog\nsolo la base del lab", fillcolor="#FBF5FC"];
+      empty  [label="aws_iam_role\nrol-sin-permisos\n(Parte 7)"];
+      role -> p_ds; role -> p_lab; role -> p_glue;
+    }
+
+    // ------------------------------------------------------------ redshift
+    subgraph cluster_redshift {
+      label="module.redshift"; style="rounded,filled"; fillcolor="#FCE9E9"; color="#D97A7A";
+      lg    [label="aws_cloudwatch_log_group\n/aws/redshift/<namespace>/connectionlog\nretención 7 días"];
+      ns    [label="aws_redshiftserverless_namespace\ncontraseña gestionada (Secrets Manager)\nrol por defecto + 2 roles asociados"];
+      wg    [label="aws_redshiftserverless_workgroup\n4 RPUs base / 8 máx, privado"];
+      ul    [label="aws_redshiftserverless_usage_limit\n16 RPU-h diarias → deactivate"];
+      lg -> ns [label="depends_on\n(crear antes)", style=solid];
+      ns -> wg; wg -> ul;
+    }
+
+    // ------------------------------------------------------------ athena
+    subgraph cluster_athena {
+      label="module.athena"; style="rounded,filled"; fillcolor="#E6F5F3"; color="#5DB3A8";
+      awg [label="aws_athena_workgroup\nresultados en s3://<bucket>/athena-results/\nforce_destroy"];
+    }
+
+    // ------------------------------------------------------------ budget
+    subgraph cluster_budget {
+      label="module.budget  (opcional)"; style="rounded,filled,dotted"; fillcolor="#F4F4F4"; color="#9AA3A9";
+      bud [label="aws_budgets_budget\nsolo con enable_budget_guardrail", style="rounded,filled,dotted"];
+    }
+  }
+
+  // ---------------------------------------------------------------- externo a Terraform
+  subgraph cluster_external {
+    label="Fuera de Terraform"; style="rounded,dashed"; color="#8A949C"; fontcolor="#5B6770";
+    tickit  [label="s3://redshift-downloads/tickit/\ndataset público TICKIT (us-east-1)", shape=cylinder, fillcolor="#F2F2F2"];
+    secret  [label="Secrets Manager\nredshift!<namespace>-awsuser\n(lo crea y borra Redshift)", shape=cylinder, fillcolor="#F2F2F2"];
+  }
+
+  // ---------------------------------------------------------------- herramientas
+  subgraph cluster_tools {
+    label="scripts/lab  (herramientas)"; style="rounded,dashed"; color="#8A949C"; fontcolor="#5B6770";
+    tfout [label="terraform output -json\n(salidas de la raíz)", shape=note, fillcolor="#F2F2F2"];
+    run   [label="run_lab.py\n--part N | --all | --check\n+ sql/*.sql"];
+    ver   [label="verify_teardown.py\n(solo lectura)"];
+    tfout -> run [style=dashed, label="LabConfig"];
+  }
+
+  // ================================================================ dependencias de Terraform (continuas)
+  caller -> bucket [label="account_id\n(nombre del bucket)"];
+  caller -> role   [label="account_id\n(ARN de Glue)", lhead=cluster_iam];
+
+  bucket -> p_lab  [label="bucket_arn"];
+  glue   -> p_glue [label="database_name,\ndatabase_arn"];
+  bucket -> awg    [label="bucket_name\n(resultados)"];
+
+  role  -> ns      [label="redshift_role_arn"];
+  empty -> ns      [label="no_permissions_role_arn"];
+
+  subs -> wg       [label="subnet_ids"];
+  sg   -> wg       [label="security_group_id"];
+
+  // ================================================================ en tiempo de ejecución / externas (discontinuas)
+  tickit -> p_ds   [style=dashed, constraint=false, label="COPY y Spectrum\nleen tickit/*"];
+  wg   -> glue     [style=dashed, label="CREATE EXTERNAL SCHEMA\n(Spectrum)"];
+  awg  -> glue     [style=dashed, label="consulta\nspectrumdb.sales"];
+  wg   -> bucket   [style=dashed, label="UNLOAD\n(Parquet)"];
+  ns   -> secret   [style=dashed, label="gestiona"];
+
+  run  -> wg       [style=dashed, label="Data API\n+ secreto"];
+  secret -> run    [style=dashed, label="credenciales"];
+  run  -> awg      [style=dashed, label="start_query_execution"];
+  ver  -> caller   [style=dashed, lhead=cluster_root, label="busca residuos por\nprefijo y tag"];
+}

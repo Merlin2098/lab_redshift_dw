@@ -3,6 +3,9 @@
 Laboratorio de Amazon Redshift Serverless sobre el dataset TICKIT. Toda la infraestructura
 se crea y se destruye con Terraform. Guion de la demo: [docs/guia_laboratorio_sesion5_redshift.md](docs/guia_laboratorio_sesion5_redshift.md).
 
+Dependencias entre los módulos de Terraform y las herramientas: [docs/architecture/architecture.svg](docs/architecture/architecture.svg)
+(fuente: [architecture.dot](docs/architecture/architecture.dot)).
+
 ## 0. Prerrequisitos
 
 - Cuenta AWS **propia de sandbox**. La identidad de tus credenciales debe poder crear y leer todos los
