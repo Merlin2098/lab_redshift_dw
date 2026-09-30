@@ -49,6 +49,27 @@ run "policies_are_scoped_without_wildcard_resources" {
   }
 }
 
+run "get_bucket_location_is_not_gated_by_the_prefix_condition" {
+  command = apply
+
+  # s3:GetBucketLocation carries no s3:prefix key, so under a StringLike s3:prefix condition it is never allowed.
+  assert {
+    condition = alltrue([
+      for s in jsondecode(aws_iam_role_policy.dataset_read.policy).Statement :
+      !contains(s.Action, "s3:GetBucketLocation") || !contains(keys(s), "Condition")
+    ])
+    error_message = "s3:GetBucketLocation on the dataset bucket must be in a statement without the s3:prefix condition."
+  }
+
+  assert {
+    condition = anytrue([
+      for s in jsondecode(aws_iam_role_policy.dataset_read.policy).Statement :
+      contains(s.Action, "s3:GetBucketLocation")
+    ])
+    error_message = "s3:GetBucketLocation on the dataset bucket must still be granted."
+  }
+}
+
 run "no_permissions_role_is_named_for_part_7" {
   command = apply
 

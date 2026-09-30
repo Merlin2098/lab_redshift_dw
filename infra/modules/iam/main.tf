@@ -34,9 +34,15 @@ resource "aws_iam_role_policy" "dataset_read" {
       },
       {
         Effect    = "Allow"
-        Action    = ["s3:ListBucket", "s3:GetBucketLocation"]
+        Action    = ["s3:ListBucket"]
         Resource  = [local.dataset_bucket_arn]
         Condition = { StringLike = { "s3:prefix" = ["${var.dataset_prefix}/*"] } }
+      },
+      # GetBucketLocation carries no s3:prefix key: under the condition above it would never be allowed.
+      {
+        Effect   = "Allow"
+        Action   = ["s3:GetBucketLocation"]
+        Resource = [local.dataset_bucket_arn]
       },
     ]
   })

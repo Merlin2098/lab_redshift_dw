@@ -156,6 +156,43 @@ def test_vpc_lookup_uses_project_tag_filter():
     assert kwargs["Filters"] == [{"Name": "tag:Project", "Values": ["redshift-lab"]}]
 
 
+def test_tfvars_values_become_the_defaults(tmp_path, capsys):
+    tfvars = tmp_path / "terraform.tfvars"
+    tfvars.write_text(
+        '# project_name = "commented"\nproject_name = "mylab"\nglue_database_name = "mydb"\n',
+        encoding="utf-8",
+    )
+
+    assert main([], clients=clean_clients(), tfvars_path=tfvars) == 0
+
+    out = capsys.readouterr().out
+    assert "prefix=mylab" in out and "glue_database=mydb" in out
+
+
+def test_a_renamed_project_is_still_checked(tmp_path):
+    tfvars = tmp_path / "terraform.tfvars"
+    tfvars.write_text('project_name = "mylab"\n', encoding="utf-8")
+    dirty = clean_clients()
+    dirty["s3"] = FakeClient(buckets=["mylab-dev-123456789012-lab"])
+
+    assert main([], clients=dirty, tfvars_path=tfvars) == 1
+
+
+def test_explicit_flags_override_tfvars(tmp_path, capsys):
+    tfvars = tmp_path / "terraform.tfvars"
+    tfvars.write_text('project_name = "mylab"\n', encoding="utf-8")
+
+    main(["--prefix", "other"], clients=clean_clients(), tfvars_path=tfvars)
+
+    assert "prefix=other" in capsys.readouterr().out
+
+
+def test_missing_tfvars_falls_back_to_the_lab_defaults(tmp_path, capsys):
+    main([], clients=clean_clients(), tfvars_path=tmp_path / "absent.tfvars")
+
+    assert "prefix=redshift-lab" in capsys.readouterr().out
+
+
 def test_main_exit_code_reflects_residuals(capsys):
     assert main(["--region", "us-east-1"], clients=clean_clients()) == 0
     assert "OK" in capsys.readouterr().out

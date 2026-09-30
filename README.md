@@ -64,6 +64,9 @@ terraform -chdir=infra destroy
 uv run python scripts/lab/verify_teardown.py        # debe imprimir OK
 ```
 
+El verificador toma `project_name` y `glue_database_name` de `infra/terraform.tfvars` (si existe) y muestra
+qué prefijo está revisando; si cambiaste esos valores sin usar el archivo, pásalos con `--prefix`, `--project` y `--glue-database`.
+
 ## 5. Si algo falla
 
 - **`init`, `plan` o `destroy` fallan con `Plugin did not respond` / `x509: certificate signed by unknown authority`:**
