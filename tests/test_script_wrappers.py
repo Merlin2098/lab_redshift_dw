@@ -18,7 +18,7 @@ def test_ruff_wrappers_smoke() -> None:
         [
             sys.executable,
             "scripts/testing/run_ruff_check.py",
-            "tests/test_example_job.py",
+            "scripts/testing/run_pytest.py",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
@@ -30,7 +30,7 @@ def test_ruff_wrappers_smoke() -> None:
             sys.executable,
             "scripts/testing/run_ruff_format.py",
             "--check",
-            "tests/test_example_job.py",
+            "scripts/testing/run_pytest.py",
         ],
         cwd=REPO_ROOT,
         capture_output=True,
