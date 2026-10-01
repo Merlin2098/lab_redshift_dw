@@ -44,12 +44,35 @@ Troubleshooting: COPY sin permisos IAM
 
 ## Parte 0 — Conectarse a Redshift con Query Editor v2
 
-**Objetivo:** abrir una sesión SQL contra el workgroup que creó Terraform.
+**Objetivo:** abrir una sesión SQL contra el workgroup que creó Terraform. Son tres pasos: (0.1) entrar con la identidad correcta, (0.2) inicializar Query Editor v2 en la cuenta, la primera vez, y (0.3) crear la conexión con el secreto.
+
+### 0.1 Entra con un usuario IAM, no con root
+
+Query Editor v2 **no funciona con el usuario root** de la cuenta: la pantalla de configuración falla con *User information couldn't be retrieved. You must have an account to use Redshift Query Editor V2.* Entra a la consola con un **usuario o rol IAM**:
+
+- En un sandbox basta `AdministratorAccess`.
+- Con permisos mínimos, necesita la política administrada **AmazonRedshiftQueryEditorV2FullAccess** y poder leer el secreto de administrador de Redshift (`secretsmanager:GetSecretValue`).
+
+Si solo tienes root, créate un usuario en **IAM → Users → Create user** con acceso a la consola, adjúntale una de esas políticas y entra con la URL de inicio de sesión de IAM de tu cuenta (aparece en el resumen de IAM).
+
+### 0.2 Inicializar Query Editor v2 en la cuenta (solo la primera vez)
 
 1. En la consola de AWS, abre **Amazon Redshift**. En el menú de la izquierda elige **Query editor v2** (se abre en una pestaña nueva).
-2. En el panel izquierdo (árbol de conexiones) aparece el workgroup serverless del lab (`redshift-lab-dev-wg`). Haz clic sobre su nombre. Si te pide parámetros de conexión, continúa con el paso siguiente; si no, haz clic derecho sobre el nombre y elige **Create connection**.
-3. En **Authentication** elige **AWS Secrets Manager**. En **Secret** selecciona el secreto cuyo nombre empieza por `redshift!redshift-lab-dev-ns-` (es el que corresponde al `admin_secret_arn`). Elige **Create connection**.
-4. Abre una pestaña **Editor** y ejecuta esta consulta de comprobación:
+2. Si es la primera vez que se usa en esta cuenta y región, aparece la pantalla **Configure account**. Déjala con sus valores por defecto:
+   - **AWS KMS encryption:** no marques *Customize encryption settings*. Se usa una clave que AWS gestiona por ti (esta opción no se puede cambiar después).
+   - **S3 bucket (optional):** deja **S3 URI** vacío. Solo sirve para cargar archivos locales, que el lab no usa.
+3. Elige **Configure account**. Se hace una sola vez: los alumnos que ya hayan usado el editor en su cuenta ven directamente el editor y saltan este paso.
+
+### 0.3 Conectarse al workgroup con el secreto de Terraform
+
+**Mientras no haya una conexión activa, el botón Run está deshabilitado** y los selectores **Cluster or workgroup** y **Database** de la barra superior aparecen vacíos. Para crearla:
+
+1. En el panel izquierdo (árbol de conexiones) aparece el workgroup serverless del lab: **Serverless: redshift-lab-dev-wg**. Haz clic sobre su nombre. Si no se abre la ventana de conexión, haz clic derecho sobre el nombre y elige **Create connection**.
+2. En **Authentication** elige **AWS Secrets Manager**.
+3. En **Secret** selecciona el secreto cuyo nombre empieza por `redshift!redshift-lab-dev-ns-` y termina en `-awsuser`. Es el que corresponde al `admin_secret_arn` de las salidas de Terraform.
+4. Elige **Create connection**.
+5. Comprueba que la barra superior muestra el workgroup en **Cluster or workgroup** y `dev` en **Database**. Ahora **Run** está activo.
+6. Abre una pestaña **Editor** y ejecuta esta consulta de comprobación:
 
 ```sql
 SELECT current_user, current_database();
@@ -521,7 +544,8 @@ Vuelve a ejecutar la consulta de la sección 1.3 y confirma que `users` tiene ot
 ## Checklist de cierre de la demo
 
 - [ ] Infraestructura desplegada con Terraform y salidas anotadas
-- [ ] Conectado a Query Editor v2 con el método *AWS Secrets Manager*
+- [ ] Entré con un usuario IAM (no root) y Query Editor v2 está configurado (*Configure account*)
+- [ ] Conectado a Query Editor v2 con el método *AWS Secrets Manager* (el botón Run está activo)
 - [ ] Las 7 tablas TICKIT creadas y cargadas (conteos verificados)
 - [ ] Tabla externa `spectrumdb.sales` visible en Glue y consultable desde Athena y Redshift
 - [ ] Resultado de UNLOAD visible en S3 (`gold/ventas_agregadas/`)
