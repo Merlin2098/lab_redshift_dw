@@ -17,12 +17,12 @@ Esta guía recorre el laboratorio **usando solo la consola web de AWS**: Redshif
 - En la consola de AWS, **confirma que la región es N. Virginia (us-east-1)** (selector arriba a la derecha). Si estás en otra región no verás nada de lo creado.
 - Ten a mano estos valores. Los obtienes con `terraform -chdir=infra output`:
 
-| Valor | Comando | Dónde se usa |
-|---|---|---|
-| `workgroup_name` (p. ej. `redshift-lab-dev-wg`) | `terraform -chdir=infra output -raw workgroup_name` | Conectarse en Query Editor v2 y elegir el workgroup en Athena |
-| `admin_secret_arn` | `terraform -chdir=infra output -raw admin_secret_arn` | Identificar el secreto de conexión |
-| `bucket_name` | `terraform -chdir=infra output -raw bucket_name` | UNLOAD (Parte 5) |
-| `no_permissions_role_arn` | `terraform -chdir=infra output -raw no_permissions_role_arn` | Provocar el error de la Parte 7 |
+| Valor                                               | Comando                                                        | Dónde se usa                                                 |
+| --------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------- |
+| `workgroup_name` (p. ej. `redshift-lab-dev-wg`) | `terraform -chdir=infra output -raw workgroup_name`          | Conectarse en Query Editor v2 y elegir el workgroup en Athena |
+| `admin_secret_arn`                                | `terraform -chdir=infra output -raw admin_secret_arn`        | Identificar el secreto de conexión                           |
+| `bucket_name`                                     | `terraform -chdir=infra output -raw bucket_name`             | UNLOAD (Parte 5)                                              |
+| `no_permissions_role_arn`                         | `terraform -chdir=infra output -raw no_permissions_role_arn` | Provocar el error de la Parte 7                               |
 
 En los bloques SQL de esta guía, `<bucket_name>` y `<no_permissions_role_arn>` son los valores de la tabla anterior: **reemplázalos antes de ejecutar**. El resto del SQL se ejecuta tal cual.
 
@@ -84,6 +84,7 @@ Debe devolver el usuario administrador (`awsuser`) y la base `dev`.
 > **No uses el método "Database user name and password".** Con él, Query Editor v2 **crea por su cuenta un secreto `sqlworkbench-...` en Secrets Manager**. Terraform no lo conoce: no lo borra al destruir la infraestructura, sigue facturando y el verificador de la guía 1 no lo detecta. El método *AWS Secrets Manager* reutiliza el secreto que ya creó Terraform y no deja nada nuevo.
 
 **Notas del editor:**
+
 - Cada pestaña **Editor** abre por defecto una *sesión aislada*.
 - Los resultados se limitan a **100 filas** por defecto (opción **Limit 100**). Las consultas de esta guía devuelven pocas filas, así que no afecta.
 - **Si el secreto no aparece en la lista:** revisa que estás en us-east-1 y que tu usuario puede leer secretos (`secretsmanager:ListSecrets` y `secretsmanager:GetSecretValue`). El secreto gestionado por Redshift trae la etiqueta `Redshift`, que es la que el editor necesita para listarlo.
@@ -104,15 +105,15 @@ aws s3 ls s3://redshift-downloads/tickit/ --no-sign-request
 
 Verás estos 7 archivos (más la carpeta `spectrum/` que se usa en la Parte 6):
 
-| Archivo en S3 | Tamaño | Tabla destino |
-|---|---|---|
-| `allusers_pipe.txt` | 5,9 MB | `users` |
-| `venue_pipe.txt` | 8 KB | `venue` |
-| `category_pipe.txt` | 0,5 KB | `category` |
-| `date2008_pipe.txt` | 15 KB | `date` |
-| `allevents_pipe.txt` | 446 KB | `event` |
-| `listings_pipe.txt` | 11,6 MB | `listing` |
-| `sales_tab.txt` | 11,3 MB | `sales` |
+| Archivo en S3          | Tamaño | Tabla destino |
+| ---------------------- | ------- | ------------- |
+| `allusers_pipe.txt`  | 5,9 MB  | `users`     |
+| `venue_pipe.txt`     | 8 KB    | `venue`     |
+| `category_pipe.txt`  | 0,5 KB  | `category`  |
+| `date2008_pipe.txt`  | 15 KB   | `date`      |
+| `allevents_pipe.txt` | 446 KB  | `event`     |
+| `listings_pipe.txt`  | 11,6 MB | `listing`   |
+| `sales_tab.txt`      | 11,3 MB | `sales`     |
 
 Tu bucket del lab solo se llenará más adelante: con los resultados de Athena (Parte 4) y con el resultado de UNLOAD (Parte 5).
 
@@ -263,15 +264,16 @@ DELIMITER '\t' TIMEFORMAT 'MM/DD/YYYY HH:MI:SS' REGION 'us-east-1';
 
 Qué hace cada elemento:
 
-| Elemento | Qué significa |
-|---|---|
-| `FROM 's3://redshift-downloads/tickit/...'` | El archivo de origen: el bucket **público de AWS**, no tu bucket. |
-| `IAM_ROLE DEFAULT` | Redshift lee S3 con el rol que Terraform dejó como **rol por defecto** del namespace. Ese rol solo puede **leer** `redshift-downloads/tickit/*` y leer/escribir tu bucket del lab. No hay claves de acceso en el SQL. |
-| `DELIMITER '\|'` o `'\t'` | Cómo se separan las columnas en el archivo (barra vertical o tabulador). |
-| `TIMEFORMAT '...'` | El formato de las fechas con hora en ese archivo (`event` y `sales`). |
-| `REGION 'us-east-1'` | La región del bucket de origen. |
+| Elemento                                      | Qué significa                                                                                                                                                                                                                      |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FROM 's3://redshift-downloads/tickit/...'` | El archivo de origen: el bucket**público de AWS**, no tu bucket.                                                                                                                                                             |
+| `IAM_ROLE DEFAULT`                          | Redshift lee S3 con el rol que Terraform dejó como**rol por defecto** del namespace. Ese rol solo puede **leer** `redshift-downloads/tickit/*` y leer/escribir tu bucket del lab. No hay claves de acceso en el SQL. |
+| `DELIMITER '\|'` o `'\t'`                  | Cómo se separan las columnas en el archivo (barra vertical o tabulador).                                                                                                                                                           |
+| `TIMEFORMAT '...'`                          | El formato de las fechas con hora en ese archivo (`event` y `sales`).                                                                                                                                                           |
+| `REGION 'us-east-1'`                        | La región del bucket de origen.                                                                                                                                                                                                    |
 
 **Puntos a resaltar en vivo:**
+
 - La autorización usa `IAM_ROLE`, **no claves de acceso en texto plano**: es la práctica recomendada por AWS.
 - `COPY` carga **en paralelo** entre todos los slices del workgroup, a diferencia de un `INSERT` fila por fila.
 
@@ -289,15 +291,15 @@ UNION ALL SELECT 'sales', COUNT(*) FROM sales;
 
 Resultado esperado:
 
-| tabla | filas |
-|---|---|
-| users | 49.990 |
-| venue | 202 |
-| category | 11 |
-| date | 365 |
-| event | 8.798 |
-| listing | 192.497 |
-| sales | 172.456 |
+| tabla    | filas   |
+| -------- | ------- |
+| users    | 49.990  |
+| venue    | 202     |
+| category | 11      |
+| date     | 365     |
+| event    | 8.798   |
+| listing  | 192.497 |
+| sales    | 172.456 |
 
 Que `sales` tenga **~172.000 filas** da la sensación de un volumen real de Data Warehouse, aunque sea pequeño.
 
@@ -345,9 +347,9 @@ ORDER BY d.year, d.month, ingresos_totales DESC;
 Devuelve **24 filas** (12 meses × 2 grupos de categoría). Las primeras deben ser:
 
 | year | month | catgroup | total_tickets_vendidos | ingresos_totales | ticket_promedio |
-|---|---|---|---|---|---|
-| 2008 | APR | Concerts | 18231 | 5916127.00 | 652.41 |
-| 2008 | APR | Shows | 12596 | 4154861.00 | 658.87 |
+| ---- | ----- | -------- | ---------------------- | ---------------- | --------------- |
+| 2008 | APR   | Concerts | 18231                  | 5916127.00       | 652.41          |
+| 2008 | APR   | Shows    | 12596                  | 4154861.00       | 658.87          |
 
 **Idea a transmitir:** esta es la clase de consulta recurrente de BI (agregaciones por mes y categoría) que justifica tener un Data Warehouse en vez de solo un Data Lake.
 
@@ -420,11 +422,11 @@ Las dos consultas devuelven **exactamente las mismas 10 filas** (la primera es `
 
 ### 4.4 Comparar en pantalla
 
-| Aspecto | Athena | Redshift |
-|---|---|---|
-| Tiempo de respuesta | El que muestra la consola de Athena | El que muestra Query Editor v2 |
-| Costo | **5 USD por TB escaneado** (mínimo 10 MB por consulta) | Cómputo del workgroup (RPUs), **no** por dato escaneado |
-| ¿Requiere carga previa? | No: consulta directa sobre S3 | Sí: los datos ya estaban cargados (Parte 1) |
+| Aspecto                  | Athena                                                        | Redshift                                                      |
+| ------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------- |
+| Tiempo de respuesta      | El que muestra la consola de Athena                           | El que muestra Query Editor v2                                |
+| Costo                    | **5 USD por TB escaneado** (mínimo 10 MB por consulta) | Cómputo del workgroup (RPUs),**no** por dato escaneado |
+| ¿Requiere carga previa? | No: consulta directa sobre S3                                 | Sí: los datos ya estaban cargados (Parte 1)                  |
 
 En nuestra prueba: Athena tardó unos 0,9 s y escaneó unos 12 MB (del orden de 0,00006 USD); Redshift tardó unos 0,3 s. Con un dataset tan pequeño **ambos responden en menos de un segundo**: la demo no demuestra velocidad, demuestra el **modelo de costo y de carga de trabajo**. Tus números serán parecidos, no idénticos.
 
@@ -567,14 +569,14 @@ uv run python scripts/lab/run_lab.py --check       # valida los conteos de TICKI
 
 Esta guía sigue el orden narrativo de `propuesta_diseno_ppts_sesion_5_redshift.md`:
 
-| Parte de la demo | Bloque de las slides |
-|---|---|
-| Parte 1 (COPY) | Bloque 4 — Data Movement |
-| Parte 2 (modelo dimensional) | Bloque 2 — Modelado dimensional |
-| Parte 3 (consulta analítica) | Bloque 1 — Data Warehouse |
-| Parte 4 (Athena vs. Redshift) | Bloque 12 — Redshift vs. Athena |
-| Parte 5 (UNLOAD) | Bloque 4 — Data Movement |
-| Parte 6 (Spectrum) | Bloque 5 — Datos externos |
+| Parte de la demo                    | Bloque de las slides                                           |
+| ----------------------------------- | -------------------------------------------------------------- |
+| Parte 1 (COPY)                      | Bloque 4 — Data Movement                                      |
+| Parte 2 (modelo dimensional)        | Bloque 2 — Modelado dimensional                               |
+| Parte 3 (consulta analítica)       | Bloque 1 — Data Warehouse                                     |
+| Parte 4 (Athena vs. Redshift)       | Bloque 12 — Redshift vs. Athena                               |
+| Parte 5 (UNLOAD)                    | Bloque 4 — Data Movement                                      |
+| Parte 6 (Spectrum)                  | Bloque 5 — Datos externos                                     |
 | Parte 7 (troubleshooting, opcional) | Bloque 8 — Observabilidad y Troubleshooting (versión ligera) |
 
 ## Fuentes consultadas (documentación de AWS)
