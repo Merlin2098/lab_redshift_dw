@@ -18,15 +18,15 @@ TICKIT es el dataset de ejemplo oficial de AWS para Redshift: las ventas de entr
 (7 tablas: una de hechos, `sales`, con unas 172.000 ventas, y seis dimensiones). El dato ya está en un **bucket público de S3**, es decir, en un
 Data Lake. A partir de ahí el laboratorio muestra qué pasa cuando ese dato:
 
-| Parte | Qué se hace | Qué enseña |
-|---|---|---|
-| 1 | `COPY` desde S3 hacia Redshift | Carga **paralela** y autorizada con un rol IAM, sin claves en el SQL |
-| 2 | Consulta sobre el modelo en estrella | Hechos al centro, dimensiones alrededor |
-| 3 | Agregación por mes y categoría | El tipo de consulta **recurrente** de BI que justifica un Data Warehouse |
-| 4 | La misma pregunta en Athena y en Redshift | Se diferencian por **modelo de costo y de carga de trabajo**, no por velocidad |
-| 5 | `UNLOAD` de Redshift a S3 en Parquet | Redshift también **produce** datos hacia el lake |
-| 6 | Redshift Spectrum | Consultar S3 **sin cargarlo**, y combinarlo con lo ya cargado |
-| 7 *(opcional)* | `COPY` con un rol sin permisos | Cómo leer un error de permisos |
+| Parte           | Qué se hace                              | Qué enseña                                                                        |
+| --------------- | ----------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1               | `COPY` desde S3 hacia Redshift          | Carga**paralela** y autorizada con un rol IAM, sin claves en el SQL           |
+| 2               | Consulta sobre el modelo en estrella      | Hechos al centro, dimensiones alrededor                                             |
+| 3               | Agregación por mes y categoría          | El tipo de consulta**recurrente** de BI que justifica un Data Warehouse       |
+| 4               | La misma pregunta en Athena y en Redshift | Se diferencian por**modelo de costo y de carga de trabajo**, no por velocidad |
+| 5               | `UNLOAD` de Redshift a S3 en Parquet    | Redshift también**produce** datos hacia el lake                              |
+| 6               | Redshift Spectrum                         | Consultar S3**sin cargarlo**, y combinarlo con lo ya cargado                  |
+| 7*(opcional)* | `COPY` con un rol sin permisos          | Cómo leer un error de permisos                                                     |
 
 Con un dataset tan pequeño, Athena y Redshift responden en menos de un segundo: la demo no vende rendimiento, muestra **cuándo
 conviene cada herramienta**.
@@ -44,15 +44,15 @@ Un único `terraform apply` crea todo lo necesario, y `terraform destroy` lo eli
 `infra/` solo **compone módulos**: calcula nombres y etiquetas y conecta las salidas de unos con las entradas de otros. Los números
 son los del diagrama.
 
-| # | Módulo | Qué crea | Depende de |
-|---|---|---|---|
-| 1 | `iam` | Rol de Redshift (con tres políticas acotadas) y el rol vacío `rol-sin-permisos` de la Parte 7 | `s3`, `data_catalog` |
-| 2 | `redshift` | Namespace (contraseña gestionada por Secrets Manager), workgroup de 4 RPUs, tope diario de consumo y log group | `iam`, `network` |
-| 3 | `athena` | Workgroup con los resultados en el bucket del lab | `s3` |
-| 4 | `network` | VPC, subnets privadas y security group sin reglas de entrada; los endpoints a S3 y Glue son opcionales | — |
-| 5 | `s3` | Bucket del lab: cifrado, sin acceso público, solo TLS | — |
-| 6 | `data_catalog` | Base de Glue `spectrumdb`, donde viven las tablas externas | — |
-| 7 | `budget` *(opcional)* | Presupuesto mensual con alerta por correo | — |
+| # | Módulo                   | Qué crea                                                                                                       | Depende de               |
+| - | ------------------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| 1 | `iam`                   | Rol de Redshift (con tres políticas acotadas) y el rol vacío`rol-sin-permisos` de la Parte 7                | `s3`, `data_catalog` |
+| 2 | `redshift`              | Namespace (contraseña gestionada por Secrets Manager), workgroup de 4 RPUs, tope diario de consumo y log group | `iam`, `network`     |
+| 3 | `athena`                | Workgroup con los resultados en el bucket del lab                                                               | `s3`                   |
+| 4 | `network`               | VPC, subnets privadas y security group sin reglas de entrada; los endpoints a S3 y Glue son opcionales          | —                       |
+| 5 | `s3`                    | Bucket del lab: cifrado, sin acceso público, solo TLS                                                          | —                       |
+| 6 | `data_catalog`          | Base de Glue`spectrumdb`, donde viven las tablas externas                                                     | —                       |
+| 7 | `budget` *(opcional)* | Presupuesto mensual con alerta por correo                                                                       | —                       |
 
 En el diagrama, la **flecha continua** es una dependencia de Terraform (fija el orden de creación) y la **discontinua**, una dependencia en
 tiempo de ejecución, como cuando Redshift consulta el catálogo de Glue o `run_lab.py` llama a la Data API. El grafo fuente, editable, está en
@@ -87,13 +87,13 @@ Los comandos de las guías se ejecutan desde esa carpeta. Después sigue estas d
 
 ## Qué contiene el repositorio
 
-| Ruta | Contenido |
-|---|---|
-| `infra/` | Raíz de Terraform y los siete módulos en `infra/modules/`, cada uno con sus tests offline |
-| `sql/` | El SQL del laboratorio, un archivo por parte |
-| `scripts/lab/` | `run_lab.py` (ejecuta el lab sin la consola) y `verify_teardown.py` (comprueba que no quedaron residuos) |
-| `tests/` | Tests locales (`tests/lab/`) y contra el lab desplegado (`tests/aws/`) |
-| `docs/` | Las dos guías, el diagrama de arquitectura, el [spec](docs/specs/2026-09-30-redshift-lab-design.md) y el [ADR](docs/internal/adr/0001-redshift-lab-architecture.md) de diseño |
+| Ruta             | Contenido                                                                                                                                                                    |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `infra/`       | Raíz de Terraform y los siete módulos en`infra/modules/`, cada uno con sus tests offline                                                                                 |
+| `sql/`         | El SQL del laboratorio, un archivo por parte                                                                                                                                 |
+| `scripts/lab/` | `run_lab.py` (ejecuta el lab sin la consola) y `verify_teardown.py` (comprueba que no quedaron residuos)                                                                 |
+| `tests/`       | Tests locales (`tests/lab/`) y contra el lab desplegado (`tests/aws/`)                                                                                                   |
+| `docs/`        | Las dos guías, el diagrama de arquitectura, el[spec](docs/specs/2026-09-30-redshift-lab-design.md) y el [ADR](docs/internal/adr/0001-redshift-lab-architecture.md) de diseño |
 
 ## Costos y precauciones
 
