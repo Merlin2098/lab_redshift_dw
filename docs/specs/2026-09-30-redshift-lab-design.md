@@ -3,7 +3,7 @@
 **Estado:** Las cuatro secciones de diseño fueron aprobadas en brainstorming (2026-09-30).
 Pendiente: revisión de este documento por Ricardo. No hay plan de implementación ni código todavía.
 
-**Fuente funcional:** [guia_laboratorio_sesion5_redshift.md](../guia_laboratorio_sesion5_redshift.md)
+**Fuente funcional:** [01_despliegue_infraestructura.md](../01_despliegue_infraestructura.md) y [02_laboratorio_consola_aws.md](../02_laboratorio_consola_aws.md) (la guía original `guia_laboratorio_sesion5_redshift.md` se separó en estos dos documentos)
 
 ---
 
@@ -140,7 +140,7 @@ Prerrequisitos → `terraform init/plan/apply` → `run_lab.py --all` (o parte p
 Nada se toca hasta que el spec esté aprobado.
 
 - **Se reemplaza/elimina:** contenido de `infra/` (`main.tf`, `variables.tf`, `outputs.tf`, `terraform.tfvars.example`; `providers.tf` y `backend.tf.example` se ajustan); `src/` completo; `tests/test_example_job.py`; dependencias de `pyproject.toml` que el lab no use.
-- **Se conserva:** `scripts/`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.env.example`, `.gitignore`, `docs/guia_laboratorio_sesion5_redshift.md`.
+- **Se conserva:** `scripts/`, `AGENTS.md`, `CLAUDE.md`, `.claude/`, `.env.example`, `.gitignore`, y la guía del lab (hoy separada en `docs/01_despliegue_infraestructura.md` y `docs/02_laboratorio_consola_aws.md`).
 - **Acoplamientos con `scripts/` a verificar al implementar:** `scripts/package.py` empaqueta `src/`; `tests/test_script_wrappers.py` usa `test_example_job.py` como argumento. Se corre la suite tras el cambio y se conservan las dependencias que los scripts necesiten. (`truststore` se retira si ningún script conservado lo importa; `check_ssl_regression.py` no lo usa.)
 - **Sin decidir:** `data/guia_reestructuracion_curso_aws_data_engineer.md` (guía del curso, no código de plantilla); se deja intacto salvo indicación contraria.
 
@@ -208,7 +208,7 @@ En el mismo orden que la grabación:
 4. **Destruir:** `terraform destroy` y luego `verify_teardown.py`.
 5. **Si algo falla:** repetir el destroy, no borrar `terraform.tfstate`, qué hacer con snapshots manuales.
 
-`docs/guia_laboratorio_sesion5_redshift.md` se corrige (sección 5) y queda como guion de la demo; el README es el manual de ejecución.
+La guía original se separó en `docs/01_despliegue_infraestructura.md` (credenciales y flujo de Terraform) y `docs/02_laboratorio_consola_aws.md` (el lab paso a paso en la consola; sus bloques SQL se verifican con un test contra `sql/`); el README es el manual de ejecución.
 
 ### Credenciales (`.env.credentials`)
 

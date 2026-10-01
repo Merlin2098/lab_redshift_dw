@@ -1,87 +1,39 @@
 # Laboratorio Redshift — Sesión 5
 
 Laboratorio de Amazon Redshift Serverless sobre el dataset TICKIT. Toda la infraestructura
-se crea y se destruye con Terraform. Guion de la demo: [docs/guia_laboratorio_sesion5_redshift.md](docs/guia_laboratorio_sesion5_redshift.md).
+se crea y se destruye con Terraform, y el laboratorio se recorre en la consola de AWS.
 
-Dependencias entre los módulos de Terraform y las herramientas: [docs/architecture/architecture.svg](docs/architecture/architecture.svg)
-(fuente: [architecture.dot](docs/architecture/architecture.dot)).
+## Cómo seguir el laboratorio
 
-## 0. Prerrequisitos
+Son dos guías, en este orden:
 
-- Cuenta AWS **propia de sandbox**. La identidad de tus credenciales debe poder crear y leer todos los
-  recursos del lab (en una cuenta sandbox, lo más simple es `AdministratorAccess`).
-- Región **us-east-1** (el dataset público TICKIT vive ahí).
-- Terraform ≥ 1.7, [uv](https://docs.astral.sh/uv/) y Git Bash.
-- Credenciales: copia `.env.example` a `.env.credentials` y completa `AWS_ACCESS_KEY_ID`,
-  `AWS_SECRET_ACCESS_KEY` (y `AWS_SESSION_TOKEN` si son temporales). Ese archivo está en `.gitignore`: **nunca lo subas**.
-- `uv sync` (instala boto3 y las herramientas de test).
+1. **[Despliegue de la infraestructura](docs/01_despliegue_infraestructura.md):** prerrequisitos, credenciales cargadas
+   desde `.env.credentials`, flujo de Terraform (`init`, `plan`, `apply`), cómo destruir todo y verificarlo.
+2. **[Laboratorio en la consola de AWS](docs/02_laboratorio_consola_aws.md):** el lab paso a paso con Query Editor v2,
+   Athena, S3 y Glue, explicando de dónde sale cada dato y qué observar en cada pantalla.
 
-## 1. Qué se crea y cuánto cuesta
+Dependencias entre los módulos de Terraform y las herramientas: [diagrama de arquitectura](docs/architecture/architect_diagram.png)
+(grafo fuente en Graphviz: [architecture.dot](docs/architecture/architecture.dot)).
 
-VPC propia (sin NAT), un bucket S3, una base de Glue, dos roles IAM, un namespace y workgroup de
-Redshift Serverless (4 RPUs), un workgroup de Athena y un log group.
+## Qué se crea y cuánto cuesta
 
-- **Redshift Serverless solo factura compute mientras corren consultas** (por segundo) más el almacenamiento.
-- Además existe un tope diario de 16 RPU-horas: al alcanzarlo se desactivan las consultas.
-- Si olvidas destruir el lab pagas almacenamiento (mínimo) y el secret de Secrets Manager. Aun así: **destruye al terminar**.
+VPC propia (sin NAT), un bucket S3 (vacío: recibe los resultados de Athena y de UNLOAD), una base de Glue, dos roles IAM,
+un namespace y workgroup de Redshift Serverless (4 RPUs), un workgroup de Athena y un log group.
 
-## 2. Desplegar
+- **Redshift Serverless solo factura cómputo mientras corren consultas** (por segundo) más el almacenamiento, y hay un
+  tope diario de 16 RPU-horas.
+- Si olvidas destruir el lab pagas almacenamiento (mínimo) y el secreto de Secrets Manager. **Destruye al terminar.**
+- **Nunca borres `terraform.tfstate`**, y no subas `.env.credentials` al repositorio (está en `.gitignore`).
 
-```bash
-set -a; . ./.env.credentials; set +a      # Terraform no lee archivos .env: se cargan en la sesión
-cp infra/terraform.tfvars.example infra/terraform.tfvars
-terraform -chdir=infra init
-terraform -chdir=infra plan
-terraform -chdir=infra apply
-```
-
-Si `apply` rechaza las dos subnets, pon `availability_zone_count = 3` en `infra/terraform.tfvars`.
-
-## 3. Ejecutar el lab
+## Referencia rápida
 
 ```bash
-uv run python scripts/lab/run_lab.py --part 1      # COPY: S3 -> Redshift (repite --part N para cada parte)
-uv run python scripts/lab/run_lab.py --all         # o todas las partes (1-7)
-uv run python scripts/lab/run_lab.py --check       # valida los conteos de TICKIT
-```
-
-| Parte | Qué muestra |
-|---|---|
-| 1 | Crear tablas y cargar con COPY |
-| 2 | Star schema con datos reales |
-| 3 | Consulta analítica agregada |
-| 4 | Athena vs. Redshift (tiempo, bytes escaneados y costo estimado) |
-| 5 | UNLOAD a S3 en Parquet particionado |
-| 6 | Spectrum: consultar S3 sin cargar |
-| 7 | Troubleshooting: COPY con un rol sin permisos |
-
-El SQL de cada parte está en `sql/`: puedes leerlo o pegarlo en Query Editor v2
-(reemplaza `${bucket}`, `${glue_database}` y `${no_permissions_role_arn}` por los valores de
-`terraform -chdir=infra output`).
-
-## 4. Destruir (siempre al terminar)
-
-```bash
-set -a; . ./.env.credentials; set +a
+set -a; . ./.env.credentials; set +a            # cargar credenciales (Git Bash; PowerShell en la guía 1)
+terraform -chdir=infra init && terraform -chdir=infra apply
+uv run python scripts/lab/run_lab.py --all      # el lab sin consola (--part N, --check)
 terraform -chdir=infra destroy
-uv run python scripts/lab/verify_teardown.py        # debe imprimir OK
+uv run python scripts/lab/verify_teardown.py    # debe imprimir OK
 ```
-
-El verificador toma `project_name` y `glue_database_name` de `infra/terraform.tfvars` (si existe) y muestra
-qué prefijo está revisando; si cambiaste esos valores sin usar el archivo, pásalos con `--prefix`, `--project` y `--glue-database`.
-
-## 5. Si algo falla
-
-- **`init`, `plan` o `destroy` fallan con `Plugin did not respond` / `x509: certificate signed by unknown authority`:**
-  un antivirus que inspecciona TLS (por ejemplo AVG) rompe el canal local entre Terraform y el provider.
-  Excluye `terraform-provider-aws*.exe` de la inspección HTTPS del antivirus, o ejecuta el comando con
-  `TF_DISABLE_PLUGIN_TLS=1` (solo desactiva el cifrado de ese canal local, no el de las llamadas a AWS).
-- **`destroy` falla por subnets o interfaces de red** (`DependencyViolation`): espera unos minutos y repite
-  `terraform -chdir=infra destroy`. Es idempotente.
-- **`verify_teardown.py` lista residuos:** repite el destroy; si persisten, bórralos a mano (la salida indica servicio y nombre).
-- **Snapshots manuales** creados desde la consola sobreviven al destroy y se facturan: bórralos.
-- **Nunca borres `terraform.tfstate`**: sin él Terraform no sabe qué destruir. Si se perdió, `verify_teardown.py`
-  encuentra los recursos por prefijo y por tag.
 
 ## Pruebas
 
@@ -91,3 +43,6 @@ terraform -chdir=infra test                              # tests de Terraform (o
 terraform -chdir=infra/modules/<modulo> test             # tests de un módulo
 uv run python scripts/testing/run_cloud_tests.py         # contra el lab desplegado (necesita credenciales)
 ```
+
+Si Terraform falla con `Plugin did not respond` o `x509: certificate signed by unknown authority`, es un antivirus que
+inspecciona TLS: ver la tabla de problemas de la [guía 1](docs/01_despliegue_infraestructura.md#3-si-algo-falla).

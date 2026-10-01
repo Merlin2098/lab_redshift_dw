@@ -10,7 +10,7 @@ from string import Template
 
 SQL_DIR = Path(__file__).resolve().parents[2] / "sql"
 
-# Part number (as in docs/guia_laboratorio_sesion5_redshift.md) -> SQL files, in execution order.
+# Part number (as in docs/02_laboratorio_consola_aws.md) -> SQL files, in execution order.
 # Parts 4 and 6 both need the external table, so both start with 07_spectrum_setup.sql (idempotent).
 PARTS: dict[int, tuple[str, ...]] = {
     1: ("01_ddl.sql", "02_copy.sql"),
