@@ -72,7 +72,8 @@ Si solo tienes root, créate un usuario en **IAM → Users → Create user** con
 3. En **Secret** selecciona el secreto cuyo nombre empieza por `redshift!redshift-lab-dev-ns-` y termina en `-awsuser`. Es el que corresponde al `admin_secret_arn` de las salidas de Terraform.
 4. Elige **Create connection**.
 5. Comprueba que la barra superior muestra el workgroup en **Cluster or workgroup** y `dev` en **Database**. Ahora **Run** está activo.
-6. Abre una pestaña **Editor** y ejecuta esta consulta de comprobación:
+6. **Apaga los interruptores Explain y Explain graph** de la barra superior (junto a *Limit 100*). Con **Explain** activado, el editor antepone `EXPLAIN` a lo que ejecutas y no corre el SQL: falla con `syntax error at or near "DROP" in context " EXPLAIN DROP"` y no se crea ninguna tabla. Solo actívalo cuando quieras ver el plan de una consulta.
+7. Abre una pestaña **Editor** y ejecuta esta consulta de comprobación:
 
 ```sql
 SELECT current_user, current_database();
@@ -545,7 +546,7 @@ Vuelve a ejecutar la consulta de la sección 1.3 y confirma que `users` tiene ot
 
 - [ ] Infraestructura desplegada con Terraform y salidas anotadas
 - [ ] Entré con un usuario IAM (no root) y Query Editor v2 está configurado (*Configure account*)
-- [ ] Conectado a Query Editor v2 con el método *AWS Secrets Manager* (el botón Run está activo)
+- [ ] Conectado a Query Editor v2 con el método *AWS Secrets Manager* (el botón Run está activo y **Explain** apagado)
 - [ ] Las 7 tablas TICKIT creadas y cargadas (conteos verificados)
 - [ ] Tabla externa `spectrumdb.sales` visible en Glue y consultable desde Athena y Redshift
 - [ ] Resultado de UNLOAD visible en S3 (`gold/ventas_agregadas/`)
