@@ -1,9 +1,10 @@
 // Arquitectura del laboratorio Redshift (Sesión 5): dependencias entre módulos Terraform y herramientas.
 //
 // Fuente de verdad: infra/main.tf (cableado de módulos), infra/modules/*/main.tf (recursos) y
-// scripts/lab/ (herramientas). Si cambia el cableado, actualizar este archivo y volver a renderizar:
-//   dot -Tsvg docs/architecture/architecture.dot -o docs/architecture/architecture.svg
-//   dot -Tpng -Gdpi=110 docs/architecture/architecture.dot -o docs/architecture/architecture.png
+// scripts/lab/ (herramientas). La imagen de referencia del proyecto es architect_diagram.png (versión
+// ilustrada de este mismo grafo). Si cambia el cableado, actualizar este archivo y la imagen.
+// Vista previa rápida (no se versiona el resultado):
+//   dot -Tsvg docs/architecture/architecture.dot -o architecture.svg
 //
 // Lectura: una flecha A -> B significa "B consume un valor que produce A" (B depende de A).
 //   trazo continuo   = dependencia de Terraform (se resuelve en plan/apply y fija el orden de creación)
