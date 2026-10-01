@@ -71,7 +71,14 @@ tiempo de ejecución, como cuando Redshift consulta el catálogo de Glue o `run_
 
 ## Cómo seguir el laboratorio
 
-Son dos guías, en este orden:
+Primero descarga el repositorio y entra en su carpeta:
+
+```bash
+git clone https://github.com/Merlin2098/lab_redshift_dw.git
+cd lab_redshift_dw
+```
+
+Los comandos de las guías se ejecutan desde esa carpeta. Después sigue estas dos guías, en este orden:
 
 1. **[Despliegue de la infraestructura](docs/01_despliegue_infraestructura.md):** prerrequisitos, credenciales cargadas
    desde `.env.credentials`, flujo de Terraform (`init`, `plan`, `apply`), cómo destruir todo y verificarlo.
@@ -96,6 +103,7 @@ Son dos guías, en este orden:
 ## Referencia rápida
 
 ```bash
+git clone https://github.com/Merlin2098/lab_redshift_dw.git && cd lab_redshift_dw
 set -a; . ./.env.credentials; set +a            # cargar credenciales (Git Bash; PowerShell en la guía 1)
 terraform -chdir=infra init && terraform -chdir=infra apply
 uv run python scripts/lab/run_lab.py --all      # el lab sin consola (--part N, --check)
